@@ -1,0 +1,1 @@
+AI Studio/Gemini integration removed; Hetzner Object Storage remains enabled.
