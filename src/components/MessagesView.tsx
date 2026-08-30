@@ -57,10 +57,10 @@ export const MessagesView: React.FC = () => {
   const otherUsers = users.filter(u => u.id !== currentUser.id);
 
   return (
-    <div className="max-w-[1100px] mx-auto px-2 sm:px-4 py-4">
+    <div className="w-full max-w-[1720px] 2xl:max-w-[1850px] mx-auto px-3 sm:px-6 lg:px-8 py-4">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         {/* ================= SIDEBAR (barra_izq) ================= */}
-        <div className="md:col-span-4 space-y-3">
+        <div className="md:col-span-4 lg:col-span-3 space-y-3">
           <div className="bg-white rounded border border-[#ccd5df] overflow-hidden text-xs shadow-xs">
             <div className="bg-[#f0f4f8] px-3 py-2 border-b border-[#ccd5df] font-bold text-gray-700 flex items-center gap-1.5">
               <Mail className="w-4 h-4 text-[#3869A0]" />
@@ -123,7 +123,7 @@ export const MessagesView: React.FC = () => {
         </div>
 
         {/* ================= MAIN MESSAGE CONTENT ================= */}
-        <div className="md:col-span-8 space-y-4">
+        <div className="md:col-span-8 lg:col-span-9 space-y-4">
           <div className="bg-white rounded border border-[#ccd5df] p-4 shadow-xs min-h-[400px]">
             {/* 1. VIEWING MESSAGE DETAIL */}
             {selectedMessage ? (

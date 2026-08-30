@@ -10,6 +10,7 @@ import {
   INITIAL_MESSAGES, INITIAL_NOTIFICATIONS, INITIAL_ACCESS_LOGS, INITIAL_ACTIVITIES
 } from '../data/mockData';
 import { playMessageSound, playSuccessSound, playClickSound, playNotificationChime } from '../utils/sound';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import confetti from 'canvas-confetti';
 
 interface ChatWindow {
@@ -41,6 +42,7 @@ interface InkoriumContextType {
   unreadNotificationsCount: number;
   pendingRequestsCount: number;
   isRealtimeSimulationEnabled: boolean;
+  isLoggedIn: boolean;
   
   // Actions
   setActiveTab: (tab: 'inicio' | 'perfil' | 'gente' | 'fotos' | 'mensajes' | 'ajustes') => void;
@@ -48,6 +50,9 @@ interface InkoriumContextType {
   viewPhoto: (photoId: string | null) => void;
   viewAlbum: (albumId: string | null) => void;
   setCurrentUserById: (userId: string) => void;
+  login: (email: string, password?: string) => { success: boolean; error?: string };
+  loginAsUser: (userId: string) => void;
+  logout: () => void;
   
   // Feed & Status
   publishStatus: (statusText: string, attachedPhotoUrl?: string) => void;
@@ -113,7 +118,26 @@ interface InkoriumContextType {
 
 const InkoriumContext = createContext<InkoriumContextType | undefined>(undefined);
 
-const STORAGE_PREFIX = 'inkorium_v1_';
+const STORAGE_PREFIX = 'inkorium_clean_v2_';
+
+const DEFAULT_EMPTY_USER: User = {
+  id: '',
+  nombre: '',
+  apellidos: '',
+  email: '',
+  sexo: 'h',
+  fnac: '2000-01-01',
+  provincia: 'Madrid',
+  ciudad: 'Madrid',
+  estado: '',
+  estadoFecha: '',
+  situacionSentimental: 'Soltero/a',
+  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
+  fechaReg: new Date().toLocaleDateString('es-ES'),
+  online: true,
+  ultimoAcceso: 'Ahora mismo',
+  chatEstado: '1'
+};
 
 export const InkoriumProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // LocalStorage loader
@@ -137,27 +161,218 @@ export const InkoriumProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const [users, setUsers] = useState<User[]>(() => load('users', INITIAL_USERS));
-  const [currentUserId, setCurrentUserId] = useState<string>(() => load('currentUserId', 'user_1'));
-  const [photos, setPhotos] = useState<Photo[]>(() => load('photos', INITIAL_PHOTOS));
-  const [albums, setAlbums] = useState<Album[]>(() => load('albums', INITIAL_ALBUMS));
-  const [feed, setFeed] = useState<FeedItem[]>(() => load('feed', INITIAL_FEED));
-  const [wallComments, setWallComments] = useState<WallComment[]>(() => load('wallComments', INITIAL_WALL_COMMENTS));
-  const [messages, setMessages] = useState<PrivateMessage[]>(() => load('messages', INITIAL_MESSAGES));
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>(() => load('friendRequests', INITIAL_FRIEND_REQUESTS));
-  const [friendships, setFriendships] = useState<Friendship[]>(() => load('friendships', INITIAL_FRIENDSHIPS));
+  const [users, setUsers] = useState<User[]>(() => {
+    const cached = load<User[]>('users', []);
+    return Array.isArray(cached) ? cached : [];
+  });
+  const [currentUserId, setCurrentUserId] = useState<string>(() => load('currentUserId', ''));
+  const [photos, setPhotos] = useState<Photo[]>(() => load('photos', []));
+  const [albums, setAlbums] = useState<Album[]>(() => load('albums', []));
+  const [feed, setFeed] = useState<FeedItem[]>(() => load('feed', []));
+  const [wallComments, setWallComments] = useState<WallComment[]>(() => load('wallComments', []));
+  const [messages, setMessages] = useState<PrivateMessage[]>(() => load('messages', []));
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>(() => load('friendRequests', []));
+  const [friendships, setFriendships] = useState<Friendship[]>(() => load('friendships', []));
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => load('chatMessages', []));
-  const [notifications, setNotifications] = useState<InkoriumNotification[]>(() => load('notifications', INITIAL_NOTIFICATIONS));
+  const [notifications, setNotifications] = useState<InkoriumNotification[]>(() => load('notifications', []));
   const [toasts, setToasts] = useState<InkoriumNotification[]>([]);
-  const [accessLogs, setAccessLogs] = useState<AccessLog[]>(() => load('accessLogs', INITIAL_ACCESS_LOGS));
-  const [activities, setActivities] = useState<UserActivity[]>(() => load('activities', INITIAL_ACTIVITIES));
-  const [isRealtimeSimulationEnabled, setIsRealtimeSimulationEnabledState] = useState<boolean>(() => load('realtimeSimEnabled', true));
+  const [accessLogs, setAccessLogs] = useState<AccessLog[]>(() => load('accessLogs', []));
+  const [activities, setActivities] = useState<UserActivity[]>(() => load('activities', []));
+  const [isRealtimeSimulationEnabled, setIsRealtimeSimulationEnabledState] = useState<boolean>(() => false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => load('isLoggedIn', false));
 
   const [activeTab, setActiveTabState] = useState<'inicio' | 'perfil' | 'gente' | 'fotos' | 'mensajes' | 'ajustes'>('inicio');
   const [selectedUserId, setSelectedUserId] = useState<string>(currentUserId);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
   const [activeChatWindows, setActiveChatWindows] = useState<ChatWindow[]>([]);
+
+  // Helper to map Supabase profiles row to Inkorium User
+  const mapProfileToUser = useCallback((p: any): User => {
+    const username = (p.username || '').trim();
+    const fullName = (p.full_name || p.nombre || p.name || '').trim();
+    
+    let nombre = '';
+    let apellidos = '';
+    
+    if (fullName) {
+      const parts = fullName.split(/\s+/);
+      nombre = parts[0] || '';
+      apellidos = parts.slice(1).join(' ') || '';
+    } else if (username) {
+      nombre = username;
+      apellidos = '';
+    } else {
+      const shortId = p.id ? p.id.substring(0, 6) : 'anon';
+      nombre = `Usuario_${shortId}`;
+      apellidos = '';
+    }
+
+    const avatar = p.avatar_url || p.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80';
+    const rawCity = (p.city || p.ciudad || p.provincia || '').trim();
+    const provincia = rawCity || 'España';
+    const ciudad = rawCity || undefined;
+    const estado = (p.user_status || p.status || p.estado || '').trim();
+    const fnac = p.birth_date || p.fnac || '2000-01-01';
+    const fechaReg = p.created_at 
+      ? new Date(p.created_at).toLocaleDateString('es-ES') 
+      : (p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-ES') : 'Reciente');
+
+    return {
+      id: p.id,
+      username: username || undefined,
+      full_name: fullName || undefined,
+      nombre,
+      apellidos,
+      email: p.email || (username ? `${username}@inkorium.es` : ''),
+      sexo: p.sexo === 'm' || p.gender === 'm' || p.gender === 'female' ? 'm' : (p.sexo === 'otro' ? 'otro' : 'h'),
+      fnac,
+      provincia,
+      ciudad,
+      estado,
+      estadoFecha: p.updated_at ? 'Reciente' : '',
+      situacionSentimental: p.relationship_status || p.situacion_sentimental || 'Soltero/a',
+      ocupacion: p.occupation || p.ocupacion || '',
+      intereses: p.profile_interests || p.intereses || '',
+      musica: p.music || p.musica || '',
+      avatar,
+      fechaReg,
+      online: Boolean(p.online !== false),
+      ultimoAcceso: p.ultimo_acceso || 'Recientemente',
+      chatEstado: p.chat_estado || '1'
+    };
+  }, []);
+
+  // Function to refresh users from Supabase profiles
+  const fetchSupabaseProfiles = useCallback(async (currentAuthUser?: User) => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) {
+        console.warn('Error fetching Supabase profiles:', error.message);
+        return;
+      }
+      if (data && Array.isArray(data)) {
+        const mappedUsers: User[] = data.map(p => mapProfileToUser(p));
+
+        setUsers(prev => {
+          const list = [...mappedUsers];
+          // Ensure current user is in list if not yet returned by profiles
+          if (currentAuthUser && !list.find(u => u.id === currentAuthUser.id || (currentAuthUser.email && u.email === currentAuthUser.email))) {
+            list.unshift(currentAuthUser);
+          }
+          return list;
+        });
+      }
+    } catch (err) {
+      console.warn('Error connecting to Supabase profiles:', err);
+    }
+  }, [mapProfileToUser]);
+
+  // Listen to Supabase auth session changes & sync user profiles
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      // 1. Fetch current session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const userMeta = session.user.user_metadata || {};
+          const supaUser: User = {
+            id: session.user.id,
+            nombre: userMeta.nombre || session.user.email?.split('@')[0] || 'Usuario',
+            apellidos: userMeta.apellidos || '',
+            email: session.user.email || '',
+            sexo: userMeta.sexo || 'h',
+            fnac: userMeta.fnac || '2000-01-01',
+            provincia: userMeta.provincia || 'Madrid',
+            ciudad: userMeta.ciudad || userMeta.provincia || 'Madrid',
+            estado: userMeta.estado || '¡Hola a todos en Inkorium!',
+            estadoFecha: 'Ahora mismo',
+            situacionSentimental: userMeta.situacionSentimental || 'Soltero/a',
+            avatar: userMeta.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
+            fechaReg: new Date(session.user.created_at || Date.now()).toLocaleDateString('es-ES'),
+            online: true,
+            ultimoAcceso: 'Ahora mismo',
+            chatEstado: '1'
+          };
+
+          setUsers(prev => {
+            const exists = prev.find(u => u.id === supaUser.id || u.email === supaUser.email);
+            if (exists) {
+              return prev.map(u => (u.id === supaUser.id || u.email === supaUser.email) ? { ...u, ...supaUser } : u);
+            }
+            return [supaUser, ...prev];
+          });
+
+          setCurrentUserId(supaUser.id);
+          setSelectedUserId(supaUser.id);
+          setIsLoggedIn(true);
+
+          // Fetch all profiles
+          fetchSupabaseProfiles(supaUser);
+        } else {
+          // If no active session in Supabase, ensure logged in state respects it
+          if (!load('isLoggedIn', false)) {
+            setIsLoggedIn(false);
+          }
+          fetchSupabaseProfiles();
+        }
+      });
+
+      // 2. Real-time profiles subscription
+      const profilesChannel = supabase
+        .channel('public:profiles')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+          fetchSupabaseProfiles();
+        })
+        .subscribe();
+
+      // 3. Auth State Change Listener
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          const userMeta = session.user.user_metadata || {};
+          const supaUser: User = {
+            id: session.user.id,
+            nombre: userMeta.nombre || session.user.email?.split('@')[0] || 'Usuario',
+            apellidos: userMeta.apellidos || '',
+            email: session.user.email || '',
+            sexo: userMeta.sexo || 'h',
+            fnac: userMeta.fnac || '2000-01-01',
+            provincia: userMeta.provincia || 'Madrid',
+            ciudad: userMeta.ciudad || userMeta.provincia || 'Madrid',
+            estado: userMeta.estado || '¡Hola a todos en Inkorium!',
+            estadoFecha: 'Ahora mismo',
+            situacionSentimental: userMeta.situacionSentimental || 'Soltero/a',
+            avatar: userMeta.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80',
+            fechaReg: new Date(session.user.created_at || Date.now()).toLocaleDateString('es-ES'),
+            online: true,
+            ultimoAcceso: 'Ahora mismo',
+            chatEstado: '1'
+          };
+
+          setUsers(prev => {
+            const exists = prev.find(u => u.id === supaUser.id || u.email === supaUser.email);
+            if (exists) {
+              return prev.map(u => (u.id === supaUser.id || u.email === supaUser.email) ? { ...u, ...supaUser } : u);
+            }
+            return [supaUser, ...prev];
+          });
+
+          setCurrentUserId(supaUser.id);
+          setSelectedUserId(supaUser.id);
+          setIsLoggedIn(true);
+          fetchSupabaseProfiles(supaUser);
+        } else {
+          setIsLoggedIn(false);
+          setCurrentUserId('');
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+        supabase?.removeChannel(profilesChannel);
+      };
+    }
+  }, [fetchSupabaseProfiles]);
 
   // Sync to local storage
   useEffect(() => save('users', users), [users]);
@@ -173,9 +388,9 @@ export const InkoriumProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => save('notifications', notifications), [notifications]);
   useEffect(() => save('accessLogs', accessLogs), [accessLogs]);
   useEffect(() => save('activities', activities), [activities]);
-  useEffect(() => save('realtimeSimEnabled', isRealtimeSimulationEnabled), [isRealtimeSimulationEnabled]);
+  useEffect(() => save('isLoggedIn', isLoggedIn), [isLoggedIn]);
 
-  const currentUser = users.find(u => u.id === currentUserId) || users[0];
+  const currentUser = users.find(u => u.id === currentUserId) || users[0] || DEFAULT_EMPTY_USER;
 
   const unreadMessagesCount = messages.filter(m => m.receptorId === currentUser.id && !m.leido).length;
   const unreadNotificationsCount = notifications.filter(n => n.userId === currentUser.id && !n.leido).length;
@@ -245,9 +460,43 @@ export const InkoriumProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (u) {
       setCurrentUserId(userId);
       setSelectedUserId(userId);
+      setIsLoggedIn(true);
       playSuccessSound();
     }
   }, [users]);
+
+  const login = useCallback((email: string, _password?: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const user = users.find(u => u.email.toLowerCase() === trimmedEmail);
+    if (user) {
+      setCurrentUserId(user.id);
+      setSelectedUserId(user.id);
+      setIsLoggedIn(true);
+      setActiveTabState('inicio');
+      playSuccessSound();
+      return { success: true };
+    }
+    return { 
+      success: false, 
+      error: 'El correo electrónico no coincide con ninguna cuenta registrada.' 
+    };
+  }, [users]);
+
+  const loginAsUser = useCallback((userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      setCurrentUserId(user.id);
+      setSelectedUserId(user.id);
+      setIsLoggedIn(true);
+      setActiveTabState('inicio');
+      playSuccessSound();
+    }
+  }, [users]);
+
+  const logout = useCallback(() => {
+    setIsLoggedIn(false);
+    playClickSound();
+  }, []);
 
   // Friendship checks
   const isFriend = useCallback((userId1: string, userId2: string) => {
@@ -1294,6 +1543,7 @@ export const InkoriumProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setUsers(prev => [newUser, ...prev]);
     setCurrentUserId(newUser.id);
     setSelectedUserId(newUser.id);
+    setIsLoggedIn(true);
     setActiveTabState('inicio');
     playSuccessSound();
     confetti({ particleCount: 100, spread: 80 });
@@ -1324,11 +1574,15 @@ export const InkoriumProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       unreadNotificationsCount,
       pendingRequestsCount,
       isRealtimeSimulationEnabled,
+      isLoggedIn,
       setActiveTab,
       viewUserProfile,
       viewPhoto,
       viewAlbum,
       setCurrentUserById,
+      login,
+      loginAsUser,
+      logout,
       publishStatus,
       likeFeedItem,
       commentFeedItem,

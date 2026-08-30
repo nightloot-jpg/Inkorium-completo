@@ -23,6 +23,7 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
     viewUserProfile,
     viewPhoto,
     setCurrentUserById,
+    logout,
     resetToDefaultData,
     simulateIncomingMessage,
     simulateWallComment,
@@ -64,9 +65,13 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
     const q = e.target.value;
     setSearchQuery(q);
     if (q.trim().length > 0) {
+      const lower = q.toLowerCase();
       const results = users.filter(u => 
-        `${u.nombre} ${u.apellidos}`.toLowerCase().includes(q.toLowerCase()) ||
-        u.provincia.toLowerCase().includes(q.toLowerCase())
+        `${u.nombre} ${u.apellidos}`.toLowerCase().includes(lower) ||
+        (u.full_name && u.full_name.toLowerCase().includes(lower)) ||
+        (u.username && u.username.toLowerCase().includes(lower)) ||
+        (u.ciudad && u.ciudad.toLowerCase().includes(lower)) ||
+        (u.provincia && u.provincia.toLowerCase().includes(lower))
       );
       setSearchResults(results);
       setShowSearchResults(true);
@@ -85,7 +90,7 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
 
   return (
     <header className="sticky top-0 z-40 bg-[#3869A0] text-white shadow-md border-b border-[#2b5380]">
-      <div className="max-w-[1100px] mx-auto px-3 flex items-center justify-between h-[48px]">
+      <div className="w-full max-w-[1720px] 2xl:max-w-[1850px] mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between h-[48px]">
         {/* Left: Brand Logo & Navigation */}
         <div className="flex items-center space-x-1 sm:space-x-4">
           {/* Inkorium Logo */}
@@ -271,7 +276,7 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                     <div className="p-8 text-center text-gray-400">
                       <Bell className="w-8 h-8 mx-auto mb-2 text-gray-300 opacity-60" />
                       <p className="font-semibold text-gray-600">No tienes notificaciones nuevas</p>
-                      <p className="text-[11px] text-gray-400 mt-1">Prueba los botones de simulación abajo para generar avisos</p>
+                      <p className="text-[11px] text-gray-400 mt-1">Aquí verás avisos de fotos, comentarios y peticiones</p>
                     </div>
                   ) : (
                     notifications.filter(n => n.userId === currentUser.id).map(notif => (
@@ -325,72 +330,12 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                   )}
                 </div>
 
-                {/* Quick Real-Time Simulator Testing Section */}
-                <div className="bg-slate-50 p-2.5 border-t border-gray-200">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      Probar Notificación en Vivo
-                    </span>
-                    <button
-                      onClick={() => setIsRealtimeSimulationEnabled(!isRealtimeSimulationEnabled)}
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded transition ${
-                        isRealtimeSimulationEnabled 
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                          : 'bg-gray-200 text-gray-600'
-                      }`}
-                    >
-                      {isRealtimeSimulationEnabled ? '● En Vivo ON' : '○ Pausado'}
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-1 text-[10px]">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        simulateIncomingMessage();
-                      }}
-                      className="px-2 py-1 bg-white hover:bg-blue-50 border border-gray-300 hover:border-blue-400 rounded text-gray-700 font-semibold text-center transition shadow-2xs cursor-pointer truncate"
-                      title="Simular nuevo mensaje privado"
-                    >
-                      + Mensaje
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        simulateWallComment();
-                      }}
-                      className="px-2 py-1 bg-white hover:bg-emerald-50 border border-gray-300 hover:border-emerald-400 rounded text-gray-700 font-semibold text-center transition shadow-2xs cursor-pointer truncate"
-                      title="Simular firma en tu tablón"
-                    >
-                      + Tablón
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        simulateFriendRequest();
-                      }}
-                      className="px-2 py-1 bg-white hover:bg-amber-50 border border-gray-300 hover:border-amber-400 rounded text-gray-700 font-semibold text-center transition shadow-2xs cursor-pointer truncate"
-                      title="Simular petición de amistad"
-                    >
-                      + Amigo
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-gray-100 px-3 py-1.5 text-center border-t border-gray-200 flex items-center justify-between">
+                <div className="bg-gray-100 px-3 py-2 text-center border-t border-gray-200">
                   <button 
                     onClick={() => { setActiveTab('ajustes'); setShowNotifications(false); }}
                     className="text-[11px] text-[#3869A0] font-semibold hover:underline"
                   >
-                    Ver historial completo
-                  </button>
-                  <button 
-                    onClick={() => { simulatePhotoInteraction(); }}
-                    className="text-[11px] text-purple-700 font-semibold hover:underline"
-                    title="Simular comentario o like en foto"
-                  >
-                    + Interacción Foto
+                    Ver historial completo de notificaciones
                   </button>
                 </div>
               </div>
@@ -452,58 +397,17 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                   </button>
                 </div>
 
-                {/* Fast Switch User */}
-                <div className="border-t border-gray-100 py-1 bg-gray-50/50">
-                  <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    <span>Cambiar de cuenta de prueba</span>
-                  </div>
-                  <div className="max-h-40 overflow-y-auto">
-                    {users.map(u => (
-                      <button
-                        key={u.id}
-                        onClick={() => {
-                          setCurrentUserById(u.id);
-                          setShowUserMenu(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center justify-between text-[11px] cursor-pointer ${
-                          u.id === currentUser.id ? 'bg-blue-50 text-[#3869A0] font-bold' : 'text-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <img src={u.avatar} alt="" className="w-5 h-5 rounded object-cover" />
-                          <span className="truncate">{u.nombre} {u.apellidos} ({u.provincia})</span>
-                        </div>
-                        {u.id === currentUser.id && <Check className="w-3 h-3 text-[#3869A0]" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Bottom Actions */}
                 <div className="border-t border-gray-200 py-1">
                   <button
                     onClick={() => {
-                      onOpenAuth();
                       setShowUserMenu(false);
+                      logout();
                     }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-gray-700 flex items-center gap-2 cursor-pointer"
+                    className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 font-semibold flex items-center gap-2 cursor-pointer text-xs"
                   >
-                    <UserPlus className="w-3.5 h-3.5 text-[#3869A0]" />
-                    <span>Crear nueva cuenta / Registro</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (confirm('¿Restablecer todos los datos originales de Inkorium?')) {
-                        resetToDefaultData();
-                        setShowUserMenu(false);
-                      }
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-red-50 text-red-600 flex items-center gap-2 cursor-pointer text-[11px]"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Restablecer datos demo</span>
+                    <LogOut className="w-4 h-4 text-red-600" />
+                    <span>Cerrar sesión</span>
                   </button>
                 </div>
               </div>

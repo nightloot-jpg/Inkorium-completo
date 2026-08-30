@@ -61,7 +61,7 @@ export const PhotosView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUploa
   };
 
   return (
-    <div className="max-w-[1100px] mx-auto px-2 sm:px-4 py-4 space-y-4">
+    <div className="w-full max-w-[1720px] 2xl:max-w-[1850px] mx-auto px-3 sm:px-6 lg:px-8 py-4 space-y-4">
       {/* Top Header Card */}
       <div className="bg-white rounded border border-[#ccd5df] p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -165,7 +165,7 @@ export const PhotosView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUploa
               Este álbum aún no tiene fotos. ¡Sube algunas ahora!
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {albumPhotos.map(p => (
                 <div
                   key={p.id}
@@ -197,7 +197,7 @@ export const PhotosView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUploa
               No has subido ninguna foto todavía.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {myUploadedPhotos.map(p => (
                 <div
                   key={p.id}
@@ -229,7 +229,7 @@ export const PhotosView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUploa
               No estás etiquetado/a en ninguna foto aún. ¡Pídeles a tus amigos que te etiqueten!
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {myTaggedPhotos.map(p => (
                 <div
                   key={p.id}
@@ -254,7 +254,7 @@ export const PhotosView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUploa
             <h3 className="font-bold text-xs text-gray-500 uppercase tracking-wider mb-3">
               Álbumes del sistema
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {/* Fotos subidas card */}
               <div
                 onClick={() => setActiveTab('subidas')}
@@ -306,7 +306,7 @@ export const PhotosView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUploa
                 No has creado ningún álbum todavía. ¡Crea uno para organizar tus fotos!
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {albums.map(album => {
                   const cover = photos.find(p => p.albumId === album.id);
                   const count = photos.filter(p => p.albumId === album.id).length;

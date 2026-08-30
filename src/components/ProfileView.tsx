@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useInkorium } from '../context/InkoriumContext';
 import { ActivityLog } from './ActivityLog';
+import { AvatarModal } from './AvatarModal';
 import { 
   UserPlus, Mail, MessageSquare, Edit3, Image as ImageIcon, 
   Heart, Calendar, MapPin, Briefcase, Music, Sparkles, 
-  Trash2, Send, Check, Shield, UserCheck
+  Trash2, Send, Check, Shield, UserCheck, Camera, Upload
 } from 'lucide-react';
 
 export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUpload }) => {
@@ -40,6 +41,7 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
   const [editingStatus, setEditingStatus] = useState(false);
   const [newStatusText, setNewStatusText] = useState(profileUser.estado);
   const [showDirectMessageModal, setShowDirectMessageModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [mpSubject, setMpSubject] = useState('');
   const [mpBody, setMpBody] = useState('');
 
@@ -81,7 +83,7 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
   };
 
   return (
-    <div className="max-w-[1100px] mx-auto px-2 sm:px-4 py-4 space-y-4">
+    <div className="w-full max-w-[1720px] 2xl:max-w-[1850px] mx-auto px-3 sm:px-6 lg:px-8 py-4 space-y-4">
       {/* ================= PROFILE HEADER BANNER ================= */}
       <div className="bg-white rounded border border-[#ccd5df] p-4 shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -95,12 +97,12 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
               />
               {isOwnProfile && (
                 <button
-                  onClick={onOpenUpload}
-                  className="absolute inset-0 bg-black/50 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition rounded flex flex-col items-center justify-center cursor-pointer"
-                  title="Cambiar foto de perfil"
+                  onClick={() => setShowAvatarModal(true)}
+                  className="absolute inset-0 bg-black/60 text-white text-[10px] font-bold opacity-0 group-hover:opacity-100 transition rounded flex flex-col items-center justify-center cursor-pointer"
+                  title="Cambiar foto de perfil / Avatar"
                 >
-                  <ImageIcon className="w-4 h-4 mb-0.5" />
-                  <span>Subir foto</span>
+                  <Camera className="w-4 h-4 mb-0.5" />
+                  <span>Cambiar foto</span>
                 </button>
               )}
             </div>
@@ -212,6 +214,13 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
             ) : (
               <>
                 <button
+                  onClick={() => setShowAvatarModal(true)}
+                  className="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5 text-[#3869A0]" />
+                  <span>Cambiar avatar</span>
+                </button>
+                <button
                   onClick={() => setActiveTab('ajustes')}
                   className="px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                 >
@@ -231,10 +240,10 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
         </div>
       </div>
 
-      {/* ================= TWO COLUMN PROFILE CONTENT ================= */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        {/* ================= LEFT COLUMN: PERSONAL INFO & FRIENDS ================= */}
-        <div className="md:col-span-4 space-y-4">
+      {/* ================= THREE COLUMN PROFILE CONTENT ================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* ================= LEFT COLUMN: PERSONAL INFO ================= */}
+        <div className="lg:col-span-3 space-y-4">
           {/* Datos Personales Card */}
           <div className="bg-white rounded border border-[#ccd5df] p-3 text-xs shadow-xs space-y-3">
             <div className="font-bold text-gray-800 pb-1.5 border-b border-gray-200 flex items-center gap-1.5">
@@ -293,40 +302,10 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
               </div>
             </div>
           </div>
-
-          {/* Friends Grid */}
-          <div className="bg-white rounded border border-[#ccd5df] p-3 text-xs shadow-xs">
-            <div className="font-bold text-gray-800 pb-2 border-b border-gray-200 mb-2.5 flex items-center justify-between">
-              <span>Amigos de {profileUser.nombre} ({friendsList.length})</span>
-            </div>
-
-            {friendsList.length === 0 ? (
-              <p className="text-gray-400 py-3 text-center">Todavía no tiene amigos agregados.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {friendsList.slice(0, 9).map(friend => (
-                  <div
-                    key={friend.id}
-                    onClick={() => viewUserProfile(friend.id)}
-                    className="cursor-pointer group text-center space-y-1"
-                  >
-                    <img
-                      src={friend.avatar}
-                      alt={friend.nombre}
-                      className="w-full aspect-square object-cover rounded border border-gray-200 group-hover:opacity-80 transition"
-                    />
-                    <p className="text-[10px] font-semibold text-[#3869A0] group-hover:underline truncate">
-                      {friend.nombre}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* ================= RIGHT COLUMN: ALBUMS & TABLÓN (WALL) ================= */}
-        <div className="md:col-span-8 space-y-4">
+        {/* ================= CENTER COLUMN: ALBUMS & TABLÓN (WALL) ================= */}
+        <div className="lg:col-span-6 space-y-4">
           {/* Albums & Tagged Photos Preview */}
           <div className="bg-white rounded border border-[#ccd5df] p-3 text-xs shadow-xs space-y-3">
             <div className="font-bold text-gray-800 pb-2 border-b border-gray-200 flex items-center justify-between">
@@ -343,13 +322,13 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
             </div>
 
             {/* Quick mini albums showcase */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {/* Fotos subidas */}
               <div 
                 onClick={() => setActiveTab('fotos')}
                 className="border border-gray-200 rounded p-2 hover:bg-blue-50/50 cursor-pointer transition text-center group"
               >
-                <div className="h-24 rounded bg-gray-100 overflow-hidden mb-1 flex items-center justify-center border">
+                <div className="h-28 rounded bg-gray-100 overflow-hidden mb-1.5 flex items-center justify-center border">
                   {userPhotos[0] ? (
                     <img src={userPhotos[0].archivo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
                   ) : (
@@ -365,7 +344,7 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
                 onClick={() => setActiveTab('fotos')}
                 className="border border-gray-200 rounded p-2 hover:bg-blue-50/50 cursor-pointer transition text-center group"
               >
-                <div className="h-24 rounded bg-gray-100 overflow-hidden mb-1 flex items-center justify-center border">
+                <div className="h-28 rounded bg-gray-100 overflow-hidden mb-1.5 flex items-center justify-center border">
                   {taggedPhotos[0] ? (
                     <img src={taggedPhotos[0].archivo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
                   ) : (
@@ -376,8 +355,8 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
                 <span className="text-[10px] text-gray-400">{taggedPhotos.length} foto(s)</span>
               </div>
 
-              {/* Custom album (if any) */}
-              {userAlbums.slice(0, 1).map(alb => {
+              {/* Custom albums */}
+              {userAlbums.slice(0, 2).map(alb => {
                 const albPhoto = photos.find(p => p.albumId === alb.id);
                 return (
                   <div 
@@ -385,7 +364,7 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
                     onClick={() => viewAlbum(alb.id)}
                     className="border border-gray-200 rounded p-2 hover:bg-blue-50/50 cursor-pointer transition text-center group"
                   >
-                    <div className="h-24 rounded bg-gray-100 overflow-hidden mb-1 flex items-center justify-center border">
+                    <div className="h-28 rounded bg-gray-100 overflow-hidden mb-1.5 flex items-center justify-center border">
                       {albPhoto ? (
                         <img src={albPhoto.archivo} alt="" className="w-full h-full object-cover group-hover:scale-105 transition" />
                       ) : (
@@ -399,13 +378,6 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
               })}
             </div>
           </div>
-
-          {/* ================= REGISTRO DE ACTIVIDAD (ACTIVITY LOG) ================= */}
-          <ActivityLog 
-            userId={profileUser.id} 
-            userName={profileUser.nombre} 
-            isOwnProfile={isOwnProfile} 
-          />
 
           {/* ================= TABLÓN DE COMENTARIOS (WALL) ================= */}
           <div className="bg-white rounded border border-[#ccd5df] p-3 text-xs shadow-xs space-y-3">
@@ -486,6 +458,46 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
             </div>
           </div>
         </div>
+
+        {/* ================= RIGHT COLUMN: FRIENDS & ACTIVITY LOG WIDGET ================= */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Friends Grid */}
+          <div className="bg-white rounded border border-[#ccd5df] p-3 text-xs shadow-xs">
+            <div className="font-bold text-gray-800 pb-2 border-b border-gray-200 mb-2.5 flex items-center justify-between">
+              <span>Amigos de {profileUser.nombre} ({friendsList.length})</span>
+            </div>
+
+            {friendsList.length === 0 ? (
+              <p className="text-gray-400 py-3 text-center">Todavía no tiene amigos agregados.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {friendsList.slice(0, 9).map(friend => (
+                  <div
+                    key={friend.id}
+                    onClick={() => viewUserProfile(friend.id)}
+                    className="cursor-pointer group text-center space-y-1"
+                  >
+                    <img
+                      src={friend.avatar}
+                      alt={friend.nombre}
+                      className="w-full aspect-square object-cover rounded border border-gray-200 group-hover:opacity-80 transition"
+                    />
+                    <p className="text-[10px] font-semibold text-[#3869A0] group-hover:underline truncate">
+                      {friend.nombre}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ================= REGISTRO DE ACTIVIDAD (ACTIVITY LOG WIDGET) ================= */}
+          <ActivityLog 
+            userId={profileUser.id} 
+            userName={profileUser.nombre} 
+            isOwnProfile={isOwnProfile} 
+          />
+        </div>
       </div>
 
       {/* ================= PRIVATE MESSAGE MODAL ================= */}
@@ -548,6 +560,12 @@ export const ProfileView: React.FC<{ onOpenUpload: () => void }> = ({ onOpenUplo
           </div>
         </div>
       )}
+
+      {/* Avatar Upload / Change Modal */}
+      <AvatarModal
+        isOpen={showAvatarModal}
+        onClose={() => setShowAvatarModal(false)}
+      />
     </div>
   );
 };

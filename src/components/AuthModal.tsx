@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useInkorium } from '../context/InkoriumContext';
-import { LogIn, UserPlus, Sparkles, Check, X } from 'lucide-react';
+import { LogIn, UserPlus, Sparkles, Check, X, AlertCircle } from 'lucide-react';
 import { PROVINCIAS_ESPANA } from '../types';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { users, setCurrentUserById, registerNewUser } = useInkorium();
+  const { login, registerNewUser } = useInkorium();
 
   const [mode, setMode] = useState<'login' | 'registro'>('login');
+  const [loading, setLoading] = useState(false);
 
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -26,20 +28,39 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
 
   if (!isOpen) return null;
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.email.toLowerCase() === loginEmail.trim().toLowerCase());
-    if (user) {
-      setCurrentUserById(user.id);
+    setLoginError('');
+    setLoading(true);
+
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+
+      if (error) {
+        setLoginError(error.message || 'Credenciales no válidas.');
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
       onClose();
     } else {
-      setLoginError('El email introducido no está registrado. Puedes seleccionar una cuenta demo abajo o registrarte.');
+      const result = login(loginEmail.trim(), loginPassword);
+      setLoading(false);
+      if (result.success) {
+        onClose();
+      } else {
+        setLoginError(result.error || 'Credenciales no válidas.');
+      }
     }
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regNombre.trim() || !regApellidos.trim() || !regEmail.trim()) {
+    setRegError('');
+    if (!regNombre.trim() || !regApellidos.trim() || !regEmail.trim() || !regPassword) {
       setRegError('Por favor, completa todos los campos requeridos.');
       return;
     }
@@ -48,13 +69,63 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
       return;
     }
 
-    registerNewUser(regNombre, regApellidos, regEmail, regSexo, regProvincia, regFnac);
-    onClose();
+    setLoading(true);
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signUp({
+        email: regEmail.trim(),
+        password: regPassword,
+        options: {
+          data: {
+            nombre: regNombre.trim(),
+            apellidos: regApellidos.trim(),
+            provincia: regProvincia,
+            fnac: regFnac,
+            sexo: regSexo,
+            avatar: regSexo === 'h'
+              ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80'
+              : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+          }
+        }
+      });
+
+      if (error) {
+        setRegError(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data?.user) {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          nombre: regNombre.trim(),
+          apellidos: regApellidos.trim(),
+          email: regEmail.trim(),
+          provincia: regProvincia,
+          ciudad: regProvincia,
+          sexo: regSexo,
+          fnac: regFnac,
+          avatar: regSexo === 'h'
+            ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&auto=format&fit=crop&q=80'
+            : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+          online: true,
+          estado: '¡Recién llegado a Inkorium!',
+          fecha_reg: new Date().toLocaleDateString('es-ES')
+        }).select();
+      }
+
+      setLoading(false);
+      onClose();
+    } else {
+      registerNewUser(regNombre, regApellidos, regEmail, regSexo, regProvincia, regFnac);
+      setLoading(false);
+      onClose();
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-lg border border-gray-300 max-w-lg w-full p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-xs">
+      <div className="bg-white rounded-lg border border-gray-300 max-w-md w-full p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-xs">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-200">
           <div className="flex items-center gap-2">
@@ -63,7 +134,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
             </div>
             <div>
               <h2 className="font-bold text-base text-gray-900 leading-tight">Inkorium</h2>
-              <p className="text-[11px] text-gray-500">Revive la magia de la auténtica red social</p>
+              <p className="text-[11px] text-gray-500">Inicia sesión con tu cuenta de Supabase</p>
             </div>
           </div>
 
@@ -92,7 +163,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
               mode === 'registro' ? 'bg-white text-[#3869A0] shadow-xs' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            Registro de nuevo usuario
+            Registro
           </button>
         </div>
 
@@ -100,17 +171,18 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
         {mode === 'login' ? (
           <div className="space-y-4">
             {loginError && (
-              <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
-                {loginError}
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{loginError}</span>
               </div>
             )}
 
             <form onSubmit={handleLoginSubmit} className="space-y-3">
               <div>
-                <label className="font-bold text-gray-700 block mb-1">Email:</label>
+                <label className="font-bold text-gray-700 block mb-1">Correo electrónico:</label>
                 <input
                   type="email"
-                  placeholder="ejemplo@inkorium.com"
+                  placeholder="usuario@ejemplo.com"
                   value={loginEmail}
                   onChange={e => setLoginEmail(e.target.value)}
                   className="w-full p-2 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#3869A0]"
@@ -122,57 +194,33 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                 <label className="font-bold text-gray-700 block mb-1">Contraseña:</label>
                 <input
                   type="password"
-                  placeholder="Contraseña"
+                  placeholder="••••••••"
                   value={loginPassword}
                   onChange={e => setLoginPassword(e.target.value)}
                   className="w-full p-2 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#3869A0]"
+                  required
                 />
               </div>
 
-              <div className="pt-2 flex items-center justify-between">
+              <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-2 bg-[#3869A0] hover:bg-[#2c537f] text-white font-bold rounded transition shadow-xs cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  disabled={loading}
+                  className="w-full py-2 bg-[#3869A0] hover:bg-[#2c537f] text-white font-bold rounded transition shadow-xs cursor-pointer text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Entrar en Inkorium</span>
+                  <span>{loading ? 'Entrando...' : 'Entrar en Inkorium'}</span>
                 </button>
               </div>
             </form>
-
-            {/* Quick 1-click test accounts */}
-            <div className="pt-3 border-t border-gray-200">
-              <span className="font-bold text-gray-600 block mb-2 flex items-center gap-1 text-[11px]">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>O entra directamente como una cuenta existente (1-clic):</span>
-              </span>
-
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {users.map(u => (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      setCurrentUserById(u.id);
-                      onClose();
-                    }}
-                    className="p-2 border border-gray-200 hover:border-[#3869A0] rounded flex items-center gap-2 text-left bg-gray-50/70 hover:bg-blue-50 transition cursor-pointer"
-                  >
-                    <img src={u.avatar} alt="" className="w-7 h-7 rounded object-cover border" />
-                    <div className="overflow-hidden">
-                      <p className="font-bold text-[#3869A0] truncate text-[11px]">{u.nombre} {u.apellidos}</p>
-                      <p className="text-[10px] text-gray-500 truncate">{u.provincia}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         ) : (
           /* ================= REGISTRO MODE ================= */
           <div className="space-y-4">
             {regError && (
-              <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
-                {regError}
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{regError}</span>
               </div>
             )}
 
@@ -219,7 +267,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                 <label className="font-bold text-gray-700 block mb-1">Contraseña:</label>
                 <input
                   type="password"
-                  placeholder="Crea tu contraseña"
+                  placeholder="Mínimo 6 caracteres"
                   value={regPassword}
                   onChange={e => setRegPassword(e.target.value)}
                   className="w-full p-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#3869A0]"
@@ -259,7 +307,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                   <label className="flex items-center gap-1.5 cursor-pointer font-medium">
                     <input
                       type="radio"
-                      name="sexo"
+                      name="modal_sexo"
                       checked={regSexo === 'h'}
                       onChange={() => setRegSexo('h')}
                     />
@@ -268,7 +316,7 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                   <label className="flex items-center gap-1.5 cursor-pointer font-medium">
                     <input
                       type="radio"
-                      name="sexo"
+                      name="modal_sexo"
                       checked={regSexo === 'm'}
                       onChange={() => setRegSexo('m')}
                     />
@@ -284,17 +332,18 @@ export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ 
                     checked={regTos}
                     onChange={e => setRegTos(e.target.checked)}
                   />
-                  <span>Acepto los términos y condiciones de uso de Inkorium</span>
+                  <span>Acepto los términos y condiciones de uso</span>
                 </label>
               </div>
 
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-2 bg-[#3869A0] hover:bg-[#2c537f] text-white font-bold rounded transition shadow-xs cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  disabled={loading}
+                  className="w-full py-2 bg-[#3869A0] hover:bg-[#2c537f] text-white font-bold rounded transition shadow-xs cursor-pointer text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>Completar registro</span>
+                  <span>{loading ? 'Creando cuenta...' : 'Completar registro'}</span>
                 </button>
               </div>
             </form>
