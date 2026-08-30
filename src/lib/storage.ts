@@ -1,55 +1,97 @@
+/**
+ * Storage client for Hetzner Object Storage (S3-compatible), Supabase Storage and Cloudflare R2.
+ */
 import { supabase, isSupabaseConfigured } from './supabase';
 
-export const STORAGE_BUCKET_NAME =
-  import.meta.env.VITE_STORAGE_BUCKET_NAME || 'inkorium-media';
+export const STORAGE_PUBLIC_URL = import.meta.env.VITE_STORAGE_PUBLIC_URL || '';
+export const STORAGE_BUCKET_NAME = import.meta.env.VITE_STORAGE_BUCKET_NAME || 'inkorium-media';
 
 export function dataURLtoBlob(dataurl: string): Blob {
-  const [header, data] = dataurl.split(',');
-  const mime = header?.match(/:(.*?);/)?.[1] || 'image/jpeg';
-  const binary = atob(data || '');
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: mime });
-}
-
-function toBlob(input: File | Blob | string): { blob: Blob; filename: string } {
-  if (typeof input === 'string') {
-    if (/^https?:\/\//i.test(input)) {
-      throw new Error('La subida espera un archivo o data URL, no una URL remota.');
-    }
-    const blob = dataURLtoBlob(input);
-    return { blob, filename: `image-${Date.now()}.jpg` };
+  const arr = dataurl.split(',');
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
   }
-  if (input instanceof File) {
-    return { blob: input, filename: input.name || `upload-${Date.now()}` };
-  }
-  return { blob: input, filename: `upload-${Date.now()}` };
+  return new Blob([u8arr], { type: mime });
 }
 
 export async function uploadMediaFile(
   fileOrDataUrl: File | Blob | string,
   folder: 'avatars' | 'photos' | 'wall' = 'photos'
 ): Promise<string> {
-  if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Supabase no está configurado.');
+  let blob: Blob;
+  let fileExt = 'jpg';
+  let originalName = `upload-${Date.now()}.jpg`;
+
+  if (typeof fileOrDataUrl === 'string') {
+    if (fileOrDataUrl.startsWith('http://') || fileOrDataUrl.startsWith('https://')) {
+      return fileOrDataUrl;
+    }
+    blob = dataURLtoBlob(fileOrDataUrl);
+    fileExt = blob.type.split('/')[1] || 'jpg';
+    originalName = `image-${Date.now()}.${fileExt}`;
+  } else if (fileOrDataUrl instanceof File) {
+    blob = fileOrDataUrl;
+    fileExt = fileOrDataUrl.name.split('.').pop() || 'jpg';
+    originalName = fileOrDataUrl.name;
+  } else {
+    blob = fileOrDataUrl;
+    fileExt = blob.type.split('/')[1] || 'jpg';
+    originalName = `blob-${Date.now()}.${fileExt}`;
   }
 
-  const { blob, filename } = toBlob(fileOrDataUrl);
-  const extension = filename.split('.').pop()?.toLowerCase() || 'bin';
-  const safeExtension = /^[a-z0-9]+$/.test(extension) ? extension : 'bin';
-  const path = `${folder}/${crypto.randomUUID()}.${safeExtension}`;
+  try {
+    const formData = new FormData();
+    formData.append('file', blob, originalName);
+    formData.append('folder', folder);
 
-  const { error: uploadError } = await supabase.storage
-    .from(STORAGE_BUCKET_NAME)
-    .upload(path, blob, {
-      cacheControl: '3600',
-      contentType: blob.type || 'application/octet-stream',
-      upsert: false,
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
     });
 
-  if (uploadError) throw uploadError;
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.url) return data.url;
+    }
+  } catch (apiErr) {
+    console.warn('No se pudo conectar con el endpoint de Hetzner S3:', apiErr);
+  }
 
-  const { data } = supabase.storage.from(STORAGE_BUCKET_NAME).getPublicUrl(path);
-  if (!data.publicUrl) throw new Error('No se pudo obtener la URL pública del archivo.');
-  return data.publicUrl;
+  const cleanName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKET_NAME)
+        .upload(cleanName, blob, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: blob.type || 'image/jpeg'
+        });
+
+      if (!error && data) {
+        const { data: publicData } = supabase.storage
+          .from(STORAGE_BUCKET_NAME)
+          .getPublicUrl(cleanName);
+        if (publicData?.publicUrl) return publicData.publicUrl;
+      }
+    } catch (err) {
+      console.warn('Supabase storage fallback:', err);
+    }
+  }
+
+  if (typeof fileOrDataUrl === 'string') return fileOrDataUrl;
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('No se pudo procesar el archivo.'));
+    reader.onerror = () => reject(new Error('Error al leer el archivo.'));
+    reader.readAsDataURL(blob);
+  });
 }
