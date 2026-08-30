@@ -6,7 +6,6 @@ import { supabase, isSupabaseConfigured } from './supabase';
 export const STORAGE_PUBLIC_URL = import.meta.env.VITE_STORAGE_PUBLIC_URL || '';
 export const STORAGE_BUCKET_NAME = import.meta.env.VITE_STORAGE_BUCKET_NAME || 'inkorium-media';
 
-/** Converts a data URL to a Blob. */
 export function dataURLtoBlob(dataurl: string): Blob {
   const arr = dataurl.split(',');
   const mimeMatch = arr[0].match(/:(.*?);/);
@@ -18,11 +17,7 @@ export function dataURLtoBlob(dataurl: string): Blob {
   return new Blob([u8arr], { type: mime });
 }
 
-/** Upload media to Hetzner first, then keep the original Supabase/local fallbacks. */
-export async function uploadMediaFile(
-  fileOrDataUrl: File | Blob | string,
-  folder: 'avatars' | 'photos' | 'wall' = 'photos'
-): Promise<string> {
+export async function uploadMediaFile(fileOrDataUrl: File | Blob | string, folder: 'avatars' | 'photos' | 'wall' = 'photos'): Promise<string> {
   let blob: Blob;
   let fileExt = 'jpg';
   let originalName = `upload-${Date.now()}.jpg`;
@@ -50,9 +45,6 @@ export async function uploadMediaFile(
     if (response.ok) {
       const data = await response.json();
       if (data?.url) return data.url;
-    } else {
-      const errorJson = await response.json().catch(() => ({}));
-      console.warn('Hetzner S3 upload endpoint info:', errorJson.message || response.statusText);
     }
   } catch (apiErr) {
     console.warn('No se pudo conectar con Hetzner S3:', apiErr);
@@ -62,9 +54,7 @@ export async function uploadMediaFile(
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase.storage.from(STORAGE_BUCKET_NAME).upload(cleanName, blob, {
-        cacheControl: '3600',
-        upsert: true,
-        contentType: blob.type || 'image/jpeg'
+        cacheControl: '3600', upsert: true, contentType: blob.type || 'image/jpeg'
       });
       if (!error && data) {
         const { data: publicData } = supabase.storage.from(STORAGE_BUCKET_NAME).getPublicUrl(cleanName);
@@ -78,10 +68,7 @@ export async function uploadMediaFile(
   if (typeof fileOrDataUrl === 'string') return fileOrDataUrl;
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error('No se pudo procesar el archivo.'));
-    };
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('No se pudo procesar el archivo.'));
     reader.onerror = () => reject(new Error('Error al leer el archivo.'));
     reader.readAsDataURL(blob);
   });
